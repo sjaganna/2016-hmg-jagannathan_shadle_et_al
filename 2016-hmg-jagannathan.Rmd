@@ -1,0 +1,977 @@
+---
+title: "figures.Rmd"
+author: "Sujatha Jagannathan"
+date: "February 22, 2016"
+output: html_document
+---
+I RNA-seq data analysis
+
+0. sessionInfo
+R version 3.2.2 (2015-08-14)
+Platform: x86_64-apple-darwin13.4.0 (64-bit)
+Running under: OS X 10.11.1 (El Capitan)
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+loaded via a namespace (and not attached):
+[1] tools_3.2.2
+
+1. Load data
+```{r, echo=FALSE, data_input}
+#load("data/Rdata/rnaseq/counts.expr.Rdata")
+load("geneExpr.genesets.Rdata")
+load("id2genes.Rdata")
+```
+
+2. Install edgeR
+```{r, echo=FALSE}
+source("https://bioconductor.org/biocLite.R")
+biocLite("edgeR")
+library("edgeR")
+```
+
+3. Subset data
+```{r}
+x <- geneExpr[, c(2:24)]
+
+x_set1 <- x[, c(1:6)] #iDUX4
+x_set4 <- x[, c(7:18)] #enDUX4
+x_set5 <- x[, c(19, 22, 20, 23)] #vDUX4
+```
+
+4. Define the grouping - step1
+
+```{r}
+group_set1 <- c(1, 1, 1, 2, 2, 2)
+group_set4 <- c(1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2)
+group_set5 <- c(1, 1, 2, 2)
+```
+
+5. generating a DGE list
+```{r}
+y_set1 <- DGEList(counts=x_set1, group=group_set1)
+y_set4 <- DGEList(counts=x_set4, group=group_set4)
+y_set5 <- DGEList(counts=x_set5, group=group_set5)
+```
+
+6. defining the grouping - step2
+```{r}
+design_set1 <- model.matrix(~group_set1)
+design_set4 <- model.matrix(~group_set4)
+design_set5 <- model.matrix(~group_set5)
+```
+
+
+7A. Differential expression after filtering genes with low counts (require >1 tpm in at least 1/2 of the samples)
+```{r}
+keep <- rowSums(cpm(y_set1)>1) >= 3
+y1_set1 <- y_set1[keep, , keep.lib.sizes=FALSE]
+
+keep <- rowSums(cpm(y_set4)>1) >= 6
+y1_set4 <- y_set4[keep, , keep.lib.sizes=FALSE]
+
+keep <- rowSums(cpm(y_set5)>1) >= 2
+y1_set5 <- y_set5[keep, , keep.lib.sizes=FALSE]
+
+
+#estimate dispersion with filtering
+y2_set1 <- estimateDisp(y1_set1, design_set1)
+y2_set4 <- estimateDisp(y1_set4, design_set4)
+y2_set5 <- estimateDisp(y1_set5, design_set5) 
+
+#find DE genes with filtering
+fit_set1 <- glmFit(y2_set1, design_set1)
+lrt.2vs1_set1 <- glmLRT(fit_set1, coef=2)
+iDUX4.FC <- topTags(lrt.2vs1_set1, n=12150)
+
+fit_set4 <- glmFit(y2_set4, design_set4)
+lrt.2vs1_set4 <- glmLRT(fit_set4, coef=2)
+enDUX4.FC <- topTags(lrt.2vs1_set4, n=12843)
+
+fit_set5 <- glmFit(y2_set5, design_set5)
+lrt.2vs1_set5 <- glmLRT(fit_set5, coef=2)
+vDUX4.FC <- topTags(lrt.2vs1_set5, n=12856)
+
+## Cleaning up the data table
+names(iDUX4.FC$table) <- c("iDUX4_logFC", "iDUX4_logCPM", "iDUX4_LR", "iDUX4_pval", "iDUX4_fdr")
+names(enDUX4.FC$table) <- c("enDUX4_logFC", "enDUX4_logCPM", "enDUX4_LR", "enDUX4_pval", "enDUX4_fdr")
+names(vDUX4.FC$table) <- c("vDUX4_logFC", "vDUX4_logCPM", "vDUX4_LR", "vDUX4_pval", "vDUX4_fdr")
+
+## Assemble final data structure for ploting figures
+iDUX4 <- cbind(id = row.names(iDUX4.FC$table), iDUX4.FC$table)
+enDUX4 <- cbind(id = row.names(enDUX4.FC$table), enDUX4.FC$table)
+vDUX4 <- cbind(id = row.names(vDUX4.FC$table), vDUX4.FC$table)
+
+library("dplyr")
+foldchange <- full_join(iDUX4, enDUX4, by = "id")
+foldchange <- full_join(foldchange, vDUX4, by = "id")
+ids <- foldchange$id
+foldchange.filtered <- merge(genes, foldchange, by = "id")
+save(foldchange.filtered, file="/Volumes/homes/cold/sjaganna/projects/fshd/data/Rdata/edgeR_foldchange_filtered.Rdata")
+
+```
+
+7B. Differential expression without filtering genes with low counts
+```{r}
+
+#estimate dispersion without filtering
+y2_set1 <- estimateDisp(y_set1, design_set1)
+y2_set4 <- estimateDisp(y_set4, design_set4)
+y2_set5 <- estimateDisp(y_set5, design_set5) 
+
+#find DE genes without filtering
+fit_set1 <- glmFit(y2_set1, design_set1)
+lrt.2vs1_set1 <- glmLRT(fit_set1, coef=2)
+iDUX4.FC <- topTags(lrt.2vs1_set1, n=21038)
+
+fit_set4 <- glmFit(y2_set4, design_set4)
+lrt.2vs1_set4 <- glmLRT(fit_set4, coef=2)
+enDUX4.FC <- topTags(lrt.2vs1_set4, n=21038)
+
+fit_set5 <- glmFit(y2_set5, design_set5)
+lrt.2vs1_set5 <- glmLRT(fit_set5, coef=2)
+vDUX4.FC <- topTags(lrt.2vs1_set5, n=21038)
+
+
+## Cleaning up the data table
+names(iDUX4.FC$table) <- c("iDUX4_logFC", "iDUX4_logCPM", "iDUX4_LR", "iDUX4_pval", "iDUX4_fdr")
+names(enDUX4.FC$table) <- c("enDUX4_logFC", "enDUX4_logCPM", "enDUX4_LR", "enDUX4_pval", "enDUX4_fdr")
+names(vDUX4.FC$table) <- c("vDUX4_logFC", "vDUX4_logCPM", "vDUX4_LR", "vDUX4_pval", "vDUX4_fdr")
+
+## Assemble final data structure for ploting figures
+iDUX4 <- cbind(id = row.names(iDUX4.FC$table), iDUX4.FC$table)
+enDUX4 <- cbind(id = row.names(enDUX4.FC$table), enDUX4.FC$table)
+vDUX4 <- cbind(id = row.names(vDUX4.FC$table), vDUX4.FC$table)
+
+library("dplyr")
+foldchange <- full_join(iDUX4, enDUX4, by = "id")
+foldchange <- full_join(foldchange, vDUX4, by = "id")
+ids <- foldchange$id
+foldchange.unfiltered <- merge(genes, foldchange, by = "id")
+save(foldchange.unfiltered, file="/Volumes/homes/cold/sjaganna/projects/fshd/data/Rdata/edgeR_foldchange_unfiltered.Rdata")
+
+```
+
+II. Figures for paper
+
+Fig3A-C. CPM vs logFC for different datasets
+```{r}
+foldchange <- foldchange.filtered
+
+plot(foldchange$iDUX4_logCPM, foldchange$iDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+          ylim = c(-4, 8),
+     col=ifelse(foldchange$iDUX4_fdr > 0.05, "#10101020", 
+                ifelse(foldchange$iDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(foldchange$iDUX4_logFC > 2, "#D71E1D", "#AADDA340"))))
+up <- nrow(foldchange.filtered %>% filter (iDUX4_logFC > 2 & iDUX4_fdr < 0.05))
+down <- nrow(foldchange.filtered %>% filter (iDUX4_logFC < -2 & iDUX4_fdr < 0.05))
+
+plot(foldchange$enDUX4_logCPM, foldchange$enDUX4_logFC, pch=16, cex=1, 
+     ylim = c(-4, 8),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(foldchange$enDUX4_fdr > 0.05,  "#10101020", 
+                ifelse(foldchange$enDUX4_logFC < -2,  "#2C7BB6", 
+                       ifelse(foldchange$enDUX4_logFC > 2, "#D71E1D", "#AADDA340"))))
+up <- nrow(foldchange.filtered %>% filter (enDUX4_logFC > 2 & enDUX4_fdr < 0.05))
+down <- nrow(foldchange.filtered %>% filter (enDUX4_logFC < -2 & enDUX4_fdr < 0.05))
+
+plot(foldchange$vDUX4_logCPM, foldchange$vDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     ylim = c(-4, 8), 
+     col=ifelse(foldchange$vDUX4_fdr > 0.05,  "#10101020", 
+                ifelse(foldchange$vDUX4_logFC < -2,  "#2C7BB6",  
+                       ifelse(foldchange$vDUX4_logFC > 2,"#D71E1D", "#AADDA340"))))
+
+tmp <- foldchange.filtered %>% mutate(vDUX4_logFC_mod = ifelse(vDUX4_logFC > 8, 8, ifelse(vDUX4_logFC < -4, -4, vDUX4_logFC)))
+
+plot(tmp$vDUX4_logCPM, tmp$vDUX4_logFC_mod, 
+     pch=ifelse(tmp$vDUX4_logFC > 8, 17,
+                ifelse(tmp$vDUX4_logFC < -4, 17, 16)), 
+     cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     ylim = c(-4, 8), 
+     col=ifelse(tmp$vDUX4_fdr > 0.05,  "#10101020", 
+                ifelse(tmp$vDUX4_logFC < -2,  "#2C7BB6",  
+                       ifelse(tmp$vDUX4_logFC > 2,"#D71E1D", "#AADDA340"))))
+
+
+up <- nrow(foldchange.filtered %>% filter (vDUX4_logFC > 2 & vDUX4_fdr < 0.05))
+down <- nrow(foldchange.filtered %>% filter (vDUX4_logFC < -2 & vDUX4_fdr < 0.05))
+
+```
+
+
+Fig 4 . Missing genes unique to en
+
+```{r}
+
+foldchange <- foldchange.filtered
+
+## missing in endogenous, but present in inducible
+df <- foldchange.filtered %>% filter (!is.na(iDUX4_logFC) | !is.na(enDUX4_logFC )) %>% filter(enDUX4_logCPM > 3 | iDUX4_logCPM > 3) %>% filter (is.na(enDUX4_logFC), iDUX4_logFC >2, iDUX4_fdr < 0.05)
+
+plot(foldchange$iDUX4_logCPM, foldchange$iDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+               xlim = c(0, 14),
+                    ylim = c(-4, 8),
+     col="#10101020")
+points(df$iDUX4_logCPM, df$iDUX4_logFC, pch=16, cex=1,
+          xlim = c(0, 14),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(df$iDUX4_fdr > 0.05, "#10101020", 
+                ifelse(df$iDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(df$iDUX4_logFC > 2, "#D71E1D", "#AADDA340"))))
+#identify(df$iDUX4_logCPM, df$iDUX4_logFC,labels = df$genes)
+
+plot(foldchange.unfiltered$enDUX4_logCPM, foldchange.unfiltered$enDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+               xlim = c(0, 14),
+                    ylim = c(-4, 8),
+     col="#10101020")
+df <- merge(df, foldchange.unfiltered, by = "id")
+points(df$enDUX4_logCPM.y, df$enDUX4_logFC.y, pch=16, cex=1,
+          xlim = c(0, 14),
+               ylim = c(-4, 8),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(df$iDUX4_logFC.x > 2, "#D71E1D", "#10101020"))
+
+## missing in inducible, but present in endogenous
+df <- foldchange.filtered %>% filter (!is.na(iDUX4_logFC) | !is.na(enDUX4_logFC)) %>% 
+  filter(enDUX4_logCPM > 3 | iDUX4_logCPM > 3) %>%
+  filter (is.na(iDUX4_logFC), enDUX4_logFC >2, enDUX4_fdr < 0.05)
+
+plot(foldchange$enDUX4_logCPM, foldchange$enDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5,
+               ylim = c(-4, 8),
+               xlim = c(0, 14),
+     col="#10101020")
+points(df$enDUX4_logCPM, df$enDUX4_logFC, pch=16, cex=1,
+     xlim = c(0, 10),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(df$enDUX4_fdr > 0.05, "#10101020", 
+                ifelse(df$enDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(df$enDUX4_logFC > 2, "#D71E1D", "#AADDA340"))))
+#identify(df$enDUX4_logCPM, df$enDUX4_logFC,labels = df$genes)
+
+plot(foldchange.unfiltered$iDUX4_logCPM, foldchange.unfiltered$iDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+               xlim = c(0, 14),
+                    ylim = c(-4, 8),
+     col="#10101020")
+df <- merge(df, foldchange.unfiltered, by = "id")
+points(df$iDUX4_logCPM.y, df$iDUX4_logFC.y, pch=16, cex=1,
+          xlim = c(0, 14),
+               ylim = c(-4, 8),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(df$enDUX4_fdr.x > 0.05, "#10101020", 
+                ifelse(df$enDUX4_logFC.x < -2, "#2C7BB6", 
+                       ifelse(df$enDUX4_logFC.x > 2, "#D71E1D", "#AADDA3"))))
+#identify(foldchange.unfiltered$iDUX4_logCPM, foldchange.unfiltered$iDUX4_logFC,labels = df$genes.x)
+
+df <- foldchange.filtered %>% 
+  filter (!is.na(vDUX4_logFC) | !is.na(iDUX4_logFC)) %>% 
+  filter (is.na(iDUX4_logFC), vDUX4_logFC >2)
+df <- foldchange.filtered %>% 
+  filter (!is.na(vDUX4_logFC) | !is.na(enDUX4_logFC)) %>% 
+  filter (is.na(enDUX4_logFC), vDUX4_logFC >2)
+
+df <- foldchange.filtered %>% 
+  filter (!is.na(iDUX4_logFC) | !is.na(vDUX4_logFC)) %>% 
+  filter (is.na(vDUX4_logFC), iDUX4_logFC >2)
+df <- foldchange.filtered %>% 
+  filter (!is.na(iDUX4_logFC) | !is.na(enDUX4_logFC)) %>% 
+  filter (is.na(enDUX4_logFC), iDUX4_logFC >2)
+
+df <- foldchange.filtered %>% 
+  filter (!is.na(enDUX4_logFC) | !is.na(iDUX4_logFC)) %>% 
+  filter (is.na(iDUX4_logFC), enDUX4_logFC >2)
+df <- foldchange.filtered %>% 
+  filter (!is.na(enDUX4_logFC) | !is.na(vDUX4_logFC)) %>% 
+  filter (is.na(vDUX4_logFC), enDUX4_logFC >2)
+
+# robust missing genes > 16 tpm
+df <- foldchange.filtered %>% filter (!is.na(iDUX4_logFC) | !is.na(enDUX4_logFC)) %>% filter (iDUX4_logCPM > 4 | enDUX4_logCPM > 4) %>% filter (is.na(iDUX4_logFC), enDUX4_logFC >2, enDUX4_fdr < 0.05)
+
+df <- merge(df, foldchange.unfiltered, by = "id")
+```
+
+Fig 4. Missing genes unique to en
+
+```{r}
+
+foldchange <- foldchange.filtered
+
+## unique to inducible
+df <- foldchange.filtered %>% filter (!is.na(iDUX4_logFC) | !is.na(enDUX4_logFC ) | !is.na(vDUX4_logFC )) %>% filter (is.na(enDUX4_logFC), is.na(vDUX4_logFC))
+
+plot(foldchange$iDUX4_logCPM, foldchange$iDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+#               xlim = c(0, 14),
+                    ylim = c(-4, 8),
+     col="#10101005")
+points(df$iDUX4_logCPM, df$iDUX4_logFC, pch=16, cex=1,
+#          xlim = c(0, 14),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(df$iDUX4_fdr > 0.05, "#101010", 
+                ifelse(df$iDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(df$iDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+#identify(df$iDUX4_logCPM, df$iDUX4_logFC,labels = df$genes)
+df <- merge(df, foldchange.unfiltered, by = "id")
+
+
+## unique to endogenous
+df <- foldchange.filtered %>% filter (!is.na(iDUX4_logFC) | !is.na(enDUX4_logFC ) | !is.na(vDUX4_logFC )) %>% filter (is.na(iDUX4_logFC), is.na(vDUX4_logFC))
+
+plot(foldchange$enDUX4_logCPM, foldchange$enDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5,
+               ylim = c(-4, 8),
+#               xlim = c(0, 14),
+     col="#10101005")
+points(df$enDUX4_logCPM, df$enDUX4_logFC, pch=16, cex=1,
+#     xlim = c(0, 10),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(df$enDUX4_fdr > 0.05, "#101010", 
+                ifelse(df$enDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(df$enDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+#identify(df$enDUX4_logCPM, df$enDUX4_logFC,labels = df$genes)
+df <- df %>% filter(enDUX4_logCPM > 3, 
+                    enDUX4_fdr < 0.05, 
+                    enDUX4_logFC > 2)
+df <- merge(df, foldchange.unfiltered, by = "id")
+# plot(df$iDUX4_logCPM.y, df$enDUX4_logCPM.y, 
+#      pch = 16,
+#      col=ifelse(df$enDUX4_fdr.y > 0.05, "#10101020", 
+#                 ifelse(df$enDUX4_logFC.y < -2, "#2C7BB6", 
+#                        ifelse(df$enDUX4_logFC.y > 2, "#D71E1D", "#AADDA3"))))
+
+plot(df$iDUX4_logFC.y, df$enDUX4_logFC.y, 
+     pch = ifelse(df$enDUX4_logCPM.x > 3, 16, 1),
+     cex = 1.4,
+     xlim = c(-4, 4),
+     ylim = c(-3, 6),
+     col=ifelse(df$enDUX4_fdr.y > 0.05, "#101010", 
+                ifelse(df$enDUX4_logFC.y < -2, "#2C7BB6", 
+                       ifelse(df$enDUX4_logFC.y > 2, "#D71E1D", "#AADDA3"))))
+abline(h = 0, v = 0, lty = 2)
+#identify(df$iDUX4_logFC.y, df$enDUX4_logFC.y, labels = df$genes.x)
+
+plot(df$vDUX4_logFC.y, df$enDUX4_logFC.y, 
+     pch = ifelse(df$enDUX4_logCPM.x > 3, 16, 1),
+     cex = 1.4,
+     xlim = c(-4, 4),
+     ylim = c(-3, 6),
+     col=ifelse(df$enDUX4_fdr.y > 0.05, "#101010", 
+                ifelse(df$enDUX4_logFC.y < -2, "#2C7BB6", 
+                       ifelse(df$enDUX4_logFC.y > 2, "#D71E1D", "#AADDA3"))))
+abline(h = 0, v = 0, lty = 2)
+#identify(df$vDUX4_logFC.y, df$enDUX4_logFC.y, labels = df$genes.x)
+
+plot(df$iDUX4_logFC.y, df$vDUX4_logFC.y, 
+     pch = 16,
+     #xlim = c(-2, 4),
+     #ylim = c(-3, 6),
+     col=ifelse(df$enDUX4_fdr.y > 0.05, "#10101020", 
+                ifelse(df$enDUX4_logFC.y < -2, "#2C7BB6", 
+                       ifelse(df$enDUX4_logFC.y > 2, "#D71E1D", "#AADDA3"))))
+abline(h = 0, v = 0)
+#identify(df$vDUX4_logFC.y, df$enDUX4_logFC.y, labels = df$genes.x)
+
+
+## unique to viral
+df <- foldchange.filtered %>% filter (!is.na(iDUX4_logFC) | !is.na(enDUX4_logFC ) | !is.na(vDUX4_logFC )) %>% filter (is.na(iDUX4_logFC), is.na(enDUX4_logFC))
+
+plot(foldchange$vDUX4_logCPM, foldchange$vDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5,
+               ylim = c(-8, 8),
+#               xlim = c(0, 14),
+     col="#10101005")
+points(df$vDUX4_logCPM, df$vDUX4_logFC, pch=16, cex=1,
+#     xlim = c(0, 10),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(df$vDUX4_fdr > 0.05, "#101010", 
+                ifelse(df$vDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(df$vDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+
+tmp <- foldchange.filtered %>% mutate(vDUX4_logFC_mod = ifelse(vDUX4_logFC > 8, 8, ifelse(vDUX4_logFC < -4, -4, vDUX4_logFC)))
+df <- tmp %>% filter (!is.na(iDUX4_logFC) | !is.na(enDUX4_logFC ) | !is.na(vDUX4_logFC )) %>% filter (is.na(iDUX4_logFC), is.na(enDUX4_logFC))
+
+plot(tmp$vDUX4_logCPM, tmp$vDUX4_logFC_mod, 
+          pch=ifelse(tmp$vDUX4_logFC > 8, 17,
+                ifelse(tmp$vDUX4_logFC < -4, 17, 16)), 
+     cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5,
+               ylim = c(-4, 8),
+#               xlim = c(0, 14),
+     col="#10101005")
+points(df$vDUX4_logCPM, df$vDUX4_logFC_mod, pch=16, cex=1,
+#     xlim = c(0, 14),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(df$vDUX4_fdr > 0.05, "#101010", 
+                ifelse(df$vDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(df$vDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+
+
+#identify(df$enDUX4_logCPM, df$enDUX4_logFC,labels = df$genes)
+df <- merge(df, foldchange.unfiltered, by = "id")
+plot(df$iDUX4_logCPM.y, df$vDUX4_logCPM.y, 
+     pch = 16,
+     col=ifelse(df$vDUX4_fdr.y > 0.05, "#10101020", 
+                ifelse(df$vDUX4_logFC.y < -2, "#2C7BB6", 
+                       ifelse(df$vDUX4_logFC.y > 2, "#D71E1D", "#AADDA3"))))
+
+plot(df$iDUX4_logFC.y, df$vDUX4_logFC.y, 
+     pch = 16,
+     col=ifelse(df$vDUX4_fdr.y > 0.05, "#10101020", 
+                ifelse(df$vDUX4_logFC.y < -2, "#2C7BB6", 
+                       ifelse(df$vDUX4_logFC.y > 2, "#D71E1D", "#AADDA3"))))
+
+
+
+```
+
+Supplementary table 2
+```{r}
+df <- foldchange.filtered %>% filter (!is.na(iDUX4_logFC) | !is.na(enDUX4_logFC)) %>% filter (is.na(iDUX4_logFC), enDUX4_logCPM > 3)
+write.csv(df, file="robust_en_unique.csv")
+df <- foldchange.filtered %>% filter (!is.na(iDUX4_logFC) | !is.na(enDUX4_logFC)) %>% filter (is.na(iDUX4_logFC), enDUX4_logCPM > 3, enDUX4_logFC > 2)
+write.csv(df, file="robust_en_unique.UP.csv")
+
+```
+
+Fig5. Numbers to draw venn diagram
+```{r}
+library("dplyr")
+df <- foldchange.filtered  %>% filter(enDUX4_logCPM > 3 | iDUX4_logCPM > 3 | vDUX4_logCPM > 3) 
+
+## Upregulated genes
+# A|B|C
+A_B_C <- nrow(df %>% filter(iDUX4_logFC > 2, iDUX4_fdr < 0.05, vDUX4_logFC >2, vDUX4_fdr < 0.05, enDUX4_logFC >2, enDUX4_fdr < 0.05) )
+# A|B 
+A_B <- nrow(df %>% filter(enDUX4_logFC > 2, enDUX4_fdr < 0.05, iDUX4_logFC >2, iDUX4_fdr < 0.05) ) - nrow(df %>% filter(iDUX4_logFC > 2, iDUX4_fdr < 0.05, vDUX4_logFC >2, vDUX4_fdr < 0.05, enDUX4_logFC >2, enDUX4_fdr < 0.05) )
+# A|C
+A_C <- nrow(df %>% filter(iDUX4_logFC > 2, iDUX4_fdr < 0.05, vDUX4_logFC >2, vDUX4_fdr < 0.05) ) - nrow(df %>% filter(iDUX4_logFC > 2, iDUX4_fdr < 0.05, vDUX4_logFC >2, vDUX4_fdr < 0.05, enDUX4_logFC >2, enDUX4_fdr < 0.05) )
+# B|C
+B_C <- nrow(df %>% filter(enDUX4_logFC > 2, enDUX4_fdr < 0.05, vDUX4_logFC >2, vDUX4_fdr < 0.05) ) - nrow(df %>% filter(iDUX4_logFC > 2, iDUX4_fdr < 0.05, vDUX4_logFC >2, vDUX4_fdr < 0.05, enDUX4_logFC >2, enDUX4_fdr < 0.05) )
+# A
+A <- nrow(df %>% filter(iDUX4_logFC > 2, iDUX4_fdr < 0.05) ) - (A_B_C + A_B + A_C)
+B <- nrow(df %>% filter(enDUX4_logFC > 2, enDUX4_fdr < 0.05) ) - (A_B_C + A_B + B_C)
+C <- nrow(df %>% filter(vDUX4_logFC > 2, vDUX4_fdr < 0.05) ) - (A_B_C + A_C + B_C)
+
+venn_up <- cbind(A = A, B = B, C = C, A_B = A_B, A_C = A_C, B_C = B_C, A_B_C = A_B_C)
+
+# numbers in the overlap plot
+nrow(df %>% filter(vDUX4_logFC > 2, vDUX4_fdr < 0.05) %>% filter(enDUX4_logFC < 100) )
+nrow(df %>% filter(vDUX4_logFC > 2, vDUX4_fdr < 0.05) %>% filter(iDUX4_logFC < 100) )
+nrow(df %>% filter(iDUX4_logFC > 2, iDUX4_fdr < 0.05) %>% filter(enDUX4_logFC < 100) )
+nrow(df %>% filter(iDUX4_logFC > 2, iDUX4_fdr < 0.05) %>% filter(vDUX4_logFC < 100) )
+nrow(df %>% filter(enDUX4_logFC > 2, enDUX4_fdr < 0.05) %>% filter(vDUX4_logFC < 100) )
+nrow(df %>% filter(enDUX4_logFC > 2, enDUX4_fdr < 0.05) %>% filter(iDUX4_logFC < 100) )
+
+## Downregulated genes
+# A|B|C
+A_B_C <- nrow(df %>% filter(iDUX4_logFC < -2, iDUX4_fdr < 0.05, vDUX4_logFC < -2, vDUX4_fdr < 0.05, enDUX4_logFC < -2, enDUX4_fdr < 0.05) )
+# A|B 
+A_B <- nrow(df %>% filter(enDUX4_logFC < -2, enDUX4_fdr < 0.05, iDUX4_logFC < -2, iDUX4_fdr < 0.05) ) - nrow(df %>% filter(iDUX4_logFC < -2, iDUX4_fdr < 0.05, vDUX4_logFC < -2, vDUX4_fdr < 0.05, enDUX4_logFC < -2, enDUX4_fdr < 0.05) )
+# A|C
+A_C <- nrow(df %>% filter(iDUX4_logFC < -2, iDUX4_fdr < 0.05, vDUX4_logFC < -2, vDUX4_fdr < 0.05) ) - nrow(df %>% filter(iDUX4_logFC < -2, iDUX4_fdr < 0.05, vDUX4_logFC < -2, vDUX4_fdr < 0.05, enDUX4_logFC < -2, enDUX4_fdr < 0.05) )
+# B|C
+B_C <- nrow(df %>% filter(enDUX4_logFC < -2, enDUX4_fdr < 0.05, vDUX4_logFC < -2, vDUX4_fdr < 0.05) ) - nrow(df %>% filter(iDUX4_logFC < -2, iDUX4_fdr < 0.05, vDUX4_logFC < -2, vDUX4_fdr < 0.05, enDUX4_logFC < -2, enDUX4_fdr < 0.05) )
+# A
+A <- nrow(df %>% filter(iDUX4_logFC < -2, iDUX4_fdr < 0.05) ) - (A_B_C + A_B + A_C)
+B <- nrow(df %>% filter(enDUX4_logFC < -2, enDUX4_fdr < 0.05) ) - (A_B_C + A_B + B_C)
+C <- nrow(df %>% filter(vDUX4_logFC < -2, vDUX4_fdr < 0.05) ) - (A_B_C + A_C + B_C)
+
+venn_down <- cbind(A = A, B = B, C = C, A_B = A_B, A_C = A_C, B_C = B_C, A_B_C = A_B_C)
+
+# numbers in the overlap plot
+nrow(df %>% filter(enDUX4_logFC < -1, enDUX4_fdr < 0.05) )
+nrow(df %>% filter(enDUX4_logFC < -1, enDUX4_fdr < 0.05) %>% filter(vDUX4_logFC < 100) )
+nrow(df %>% filter(enDUX4_logFC < -1, enDUX4_fdr < 0.05) %>% filter(iDUX4_logFC < 100) )
+
+nrow(df %>% filter(vDUX4_logFC < -2, vDUX4_fdr < 0.05) %>% filter(enDUX4_logFC < 100) )
+nrow(df %>% filter(vDUX4_logFC < -2, vDUX4_fdr < 0.05) %>% filter(iDUX4_logFC < 100) )
+nrow(df %>% filter(iDUX4_logFC < -2, iDUX4_fdr < 0.05) %>% filter(enDUX4_logFC < 100) )
+nrow(df %>% filter(iDUX4_logFC < -2, iDUX4_fdr < 0.05) %>% filter(vDUX4_logFC < 100) )
+nrow(df %>% filter(enDUX4_logFC < -2, enDUX4_fdr < 0.05) %>% filter(vDUX4_logFC < 100) )
+nrow(df %>% filter(enDUX4_logFC < -2, enDUX4_fdr < 0.05) %>% filter(iDUX4_logFC < 100) )
+```
+
+
+Fig5.  Heatmap highlighting similarities and differences of gene sets ## 
+```{r}
+foldchange <-foldchange.filtered
+
+df.i.en <- foldchange[, c(1:12)] %>% filter(enDUX4_logCPM > 3 | iDUX4_logCPM > 3) 
+df.i.v <- foldchange[, c(1:7, 13:17)] %>% filter(iDUX4_logCPM > 3 | vDUX4_logCPM > 3) 
+df.en.v <- foldchange[, c(1:2, 8:17)] %>% filter(enDUX4_logCPM > 3 | vDUX4_logCPM > 3) 
+
+
+df <- df.i.en[complete.cases(df.i.en), ]
+overlap_en.i <-data.frame(i=double(),nr=integer())
+for(i in seq(0,5, 0.1)){
+  nr_en.i<-nrow(df %>% filter(enDUX4_logFC > 2, enDUX4_fdr < 0.05)   %>% filter(iDUX4_logFC > i)) 
+  overlap_en.i <- rbind(overlap_en.i, data.frame(i,nr_en.i))
+}
+overlap_i.en <-data.frame(i=double(),nr=integer())
+for(i in seq(0,5, 0.1)){
+  nr_i.en<-nrow(df %>% filter(iDUX4_logFC > 2, iDUX4_fdr < 0.05)   %>% filter(enDUX4_logFC > i)) 
+  overlap_i.en <- rbind(overlap_i.en, data.frame(i,nr_i.en))
+}
+
+df <- df.en.v[complete.cases(df.en.v), ]
+overlap_en.v <-data.frame(i=double(),nr=integer())
+for(i in seq(0,5, 0.1)){
+  nr_en.v<-nrow(df %>% filter(enDUX4_logFC > 2, enDUX4_fdr < 0.05)   %>% filter(vDUX4_logFC > i)) 
+  overlap_en.v <- rbind(overlap_en.v, data.frame(i,nr_en.v))
+}
+
+overlap_v.en <-data.frame(i=double(),nr=integer())
+for(i in seq(0,5, 0.1)){
+  nr_v.en<-nrow(df %>% filter(vDUX4_logFC > 2, vDUX4_fdr < 0.05)   %>% filter(enDUX4_logFC > i)) 
+  overlap_v.en <- rbind(overlap_v.en, data.frame(i,nr_v.en))
+}
+
+df <- df.i.v[complete.cases(df.i.v), ]
+overlap_i.v <-data.frame(i=double(),nr=integer())
+for(i in seq(0,5, 0.1)){
+  nr_i.v<-nrow(df %>% filter(iDUX4_logFC > 2, iDUX4_fdr < 0.05)   %>% filter(vDUX4_logFC > i)) 
+  overlap_i.v <- rbind(overlap_i.v, data.frame(i,nr_i.v))
+}
+overlap_v.i <-data.frame(i=double(),nr=integer())
+for(i in seq(0,5, 0.1)){
+  nr_v.i<-nrow(df %>% filter(vDUX4_logFC > 2, vDUX4_fdr < 0.05)   %>% filter(iDUX4_logFC > i)) 
+  overlap_v.i <- rbind(overlap_v.i, data.frame(i,nr_v.i))
+}
+
+overlap <- merge(overlap_en.i, overlap_en.v)
+overlap <- merge(overlap, overlap_i.en)
+overlap <- merge(overlap, overlap_i.v)
+overlap <- merge(overlap, overlap_v.en)
+overlap <- merge(overlap, overlap_v.i)
+
+df <- foldchange.filtered
+overlap.norm <- overlap %>% transmute(nr_en.i = nr_en.i/nrow(df %>% filter(enDUX4_logCPM > 3 | iDUX4_logCPM > 3) %>% filter(enDUX4_logFC > 2, enDUX4_fdr < 0.05)   %>% filter(iDUX4_logFC > -100)), 
+                                      nr_en.v = nr_en.v/nrow(df %>% filter(enDUX4_logCPM > 3 | vDUX4_logCPM > 3) %>% filter(enDUX4_logFC > 2, enDUX4_fdr < 0.05)   %>% filter(vDUX4_logFC > -100)),
+                                      nr_i.en = nr_i.en/nrow(df %>% filter(enDUX4_logCPM > 3 | iDUX4_logCPM > 3) %>% filter(iDUX4_logFC > 2, iDUX4_fdr < 0.05)   %>% filter(enDUX4_logFC > -100)),
+                                      nr_i.v = nr_i.v/nrow(df %>% filter(vDUX4_logCPM > 3 | iDUX4_logCPM > 3) %>% filter(iDUX4_logFC > 2, iDUX4_fdr < 0.05)   %>% filter(vDUX4_logFC > -100)),
+                                      nr_v.en = nr_v.en/nrow(df %>% filter(enDUX4_logCPM > 3 | vDUX4_logCPM > 3) %>% filter(vDUX4_logFC > 2, vDUX4_fdr < 0.05)   %>% filter(enDUX4_logFC > -100)),
+                                      nr_v.i = nr_v.i/nrow(df %>% filter(vDUX4_logCPM > 3 | iDUX4_logCPM > 3) %>% filter(vDUX4_logFC > 2, vDUX4_fdr < 0.05)   %>% filter(iDUX4_logFC > -100)))
+
+library("lattice")
+
+colfunc <- colorRampPalette(c("#ffffff", "#ffcccc", "#ff9999", "#ff6666", "#ff3333", "#e60000"))
+levelplot(as.matrix(overlap.norm), aspect="fill", col.regions=colfunc(100))
+
+### downregulated genes
+
+df.i.en <- foldchange[, c(1:12)] %>% filter(enDUX4_logCPM > 3 | iDUX4_logCPM > 3) 
+df.i.v <- foldchange[, c(1:7, 13:17)] %>% filter(iDUX4_logCPM > 3 | vDUX4_logCPM > 3) 
+df.en.v <- foldchange[, c(1:2, 8:17)] %>% filter(enDUX4_logCPM > 3 | vDUX4_logCPM > 3) 
+
+df <- df.i.en[complete.cases(df.i.en), ]
+overlap_en.i_rel <-data.frame(i=double(),nr=integer())
+for(i in seq(-5,0, 0.1)){
+  nr_en.i_rel<-nrow(df %>% filter(enDUX4_logFC < -1, enDUX4_fdr < 0.05)   %>% filter(iDUX4_logFC < i)) 
+  overlap_en.i_rel <- rbind(overlap_en.i_rel, data.frame(i,nr_en.i_rel))
+}
+
+overlap_en.i <-data.frame(i=double(),nr=integer())
+for(i in seq(-5,0, 0.1)){
+  nr_en.i<-nrow(df %>% filter(enDUX4_logFC < -2, enDUX4_fdr < 0.05)   %>% filter(iDUX4_logFC < i)) 
+  overlap_en.i <- rbind(overlap_en.i, data.frame(i,nr_en.i))
+}
+
+overlap_i.en <-data.frame(i=double(),nr=integer())
+for(i in seq(-5,0, 0.1)){
+  nr_i.en<-nrow(df %>% filter(iDUX4_logFC < -2, iDUX4_fdr < 0.05)   %>% filter(enDUX4_logFC < i)) 
+  overlap_i.en <- rbind(overlap_i.en, data.frame(i,nr_i.en))
+}
+
+df <- df.en.v[complete.cases(df.en.v), ]
+overlap_en.v_rel <-data.frame(i=double(),nr=integer())
+for(i in seq(-5,0, 0.1)){
+  nr_en.v_rel <-nrow(df %>% filter(enDUX4_logFC < -1, enDUX4_fdr < 0.05)   %>% filter(vDUX4_logFC < i)) 
+  overlap_en.v_rel <- rbind(overlap_en.v_rel, data.frame(i,nr_en.v_rel))
+}
+
+overlap_en.v <-data.frame(i=double(),nr=integer())
+for(i in seq(-5,0, 0.1)){
+  nr_en.v<-nrow(df %>% filter(enDUX4_logFC < -2, enDUX4_fdr < 0.05)   %>% filter(vDUX4_logFC < i)) 
+  overlap_en.v <- rbind(overlap_en.v, data.frame(i,nr_en.v))
+}
+overlap_v.en <-data.frame(i=double(),nr=integer())
+for(i in seq(-5,0, 0.1)){
+  nr_v.en<-nrow(df %>% filter(vDUX4_logFC < -2, vDUX4_fdr < 0.05)   %>% filter(enDUX4_logFC < i)) 
+  overlap_v.en <- rbind(overlap_v.en, data.frame(i,nr_v.en))
+}
+
+df <- df.i.v[complete.cases(df.i.v), ]
+overlap_i.v <-data.frame(i=double(),nr=integer())
+for(i in seq(-5,0, 0.1)){
+  nr_i.v<-nrow(df %>% filter(iDUX4_logFC < -2, iDUX4_fdr < 0.05)   %>% filter(vDUX4_logFC < i)) 
+  overlap_i.v <- rbind(overlap_i.v, data.frame(i,nr_i.v))
+}
+overlap_v.i <-data.frame(i=double(),nr=integer())
+for(i in seq(-5,0, 0.1)){
+  nr_v.i<-nrow(df %>% filter(vDUX4_logFC < -2, vDUX4_fdr < 0.05)   %>% filter(iDUX4_logFC < i)) 
+  overlap_v.i <- rbind(overlap_v.i, data.frame(i,nr_v.i))
+}
+
+overlap <- merge(overlap_en.i_rel, overlap_en.v_rel)
+overlap <- merge(overlap, overlap_en.i)
+overlap <- merge(overlap, overlap_en.v)
+overlap <- merge(overlap, overlap_i.en)
+overlap <- merge(overlap, overlap_i.v)
+overlap <- merge(overlap, overlap_v.en)
+overlap <- merge(overlap, overlap_v.i)
+
+df <- foldchange
+overlap.norm <- overlap %>% transmute(nr_en.i_rel = nr_en.i_rel/nrow(df %>% filter(enDUX4_logCPM > 3 | iDUX4_logCPM > 3) %>% filter(enDUX4_logFC < -1, enDUX4_fdr < 0.05)   %>% filter(iDUX4_logFC < 100)),nr_en.v_rel = nr_en.v_rel/nrow(df %>% filter(enDUX4_logCPM > 3 | vDUX4_logCPM > 3) %>% filter(enDUX4_logFC < -1, enDUX4_fdr < 0.05)   %>% 
+filter(vDUX4_logFC < 100)),nr_en.i = nr_en.i/nrow(df %>% filter(enDUX4_logCPM > 3 | iDUX4_logCPM > 3) %>% filter(enDUX4_logFC < -2, enDUX4_fdr < 0.05)   %>% 
+filter(iDUX4_logFC < 100)), nr_en.v = nr_en.v/nrow(df %>% filter(enDUX4_logCPM > 3 | vDUX4_logCPM > 3) %>% filter(enDUX4_logFC < -2, enDUX4_fdr < 0.05)   %>% 
+filter(vDUX4_logFC < 100)), nr_i.en = nr_i.en/nrow(df %>% filter(enDUX4_logCPM > 3 | iDUX4_logCPM > 3) %>% filter(iDUX4_logFC < -2, iDUX4_fdr < 0.05)   %>% 
+filter(enDUX4_logFC < 100)), nr_i.v = nr_i.v/nrow(df %>% filter(vDUX4_logCPM > 3 | iDUX4_logCPM > 3) %>% filter(iDUX4_logFC < -2, iDUX4_fdr < 0.05)   %>% 
+filter(vDUX4_logFC < 100)), nr_v.en = nr_v.en/nrow(df %>% filter(enDUX4_logCPM > 3 | vDUX4_logCPM > 3) %>% filter(vDUX4_logFC < -2, vDUX4_fdr < 0.05)   %>% 
+filter(enDUX4_logFC < 100)), nr_v.i = nr_v.i/nrow(df %>% filter(vDUX4_logCPM > 3 | iDUX4_logCPM > 3) %>% filter(vDUX4_logFC < -2, vDUX4_fdr < 0.05)   %>% 
+filter(iDUX4_logFC < 100)))
+
+colfunc <- colorRampPalette(c("#ffffff", "#cce5ff", "#99ccff", "#66b2ff", "#3399ff", "#0073e6"))
+levelplot(as.matrix(overlap.norm), aspect="fill", col.regions=colfunc(100))
+
+```
+
+Fig5. LogFC correlation for different datasets
+
+```{r}
+
+foldchange <- foldchange.filtered %>% filter(iDUX4_logCPM > 3 | vDUX4_logCPM > 3)  
+smoothScatter(foldchange$iDUX4_logFC, foldchange$vDUX4_logFC,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+              xlim = c(-3, 8),
+              ylim = c(-3, 8),
+              colramp=colorRampPalette(c("white", "#e5f5f9", "#99d8c9", "#2ca25f")))
+abline(lm(foldchange$vDUX4_logFC ~ foldchange$iDUX4_logFC))
+
+foldchange <- foldchange.filtered %>% filter(enDUX4_logCPM > 3 | iDUX4_logCPM > 3)  
+smoothScatter(foldchange$enDUX4_logFC, foldchange$iDUX4_logFC,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+              xlim = c(-3, 8),
+              ylim = c(-3, 8),
+              colramp=colorRampPalette(c("white", "#e5f5f9", "#99d8c9", "#2ca25f")))
+abline(lm(foldchange$iDUX4_logFC ~ foldchange$enDUX4_logFC))
+
+foldchange <- foldchange.filtered %>% filter(enDUX4_logCPM > 3 | vDUX4_logCPM > 3)  
+smoothScatter(foldchange$enDUX4_logFC, foldchange$vDUX4_logFC,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+              xlim = c(-3, 8),
+              ylim = c(-3, 8),
+              colramp=colorRampPalette(c("white", "#e5f5f9", "#99d8c9", "#2ca25f")))
+abline(lm(foldchange$vDUX4_logFC ~ foldchange$enDUX4_logFC))
+
+## correlation
+foldchange <- foldchange.filtered %>% filter(iDUX4_logCPM > 3 | vDUX4_logCPM > 3)  
+cor(foldchange$iDUX4_logFC, foldchange$vDUX4_logFC, use="complete.obs", method = "pearson")
+cor.test(foldchange$iDUX4_logFC, foldchange$vDUX4_logFC)
+
+foldchange <- foldchange.filtered %>% filter(enDUX4_logCPM > 3 | iDUX4_logCPM > 3)  
+cor(foldchange$enDUX4_logFC, foldchange$iDUX4_logFC, use="complete.obs", method = "pearson")
+cor.test(foldchange$enDUX4_logFC, foldchange$iDUX4_logFC)
+
+foldchange <- foldchange.filtered %>% filter(enDUX4_logCPM > 3 | vDUX4_logCPM > 3)  
+cor(foldchange$enDUX4_logFC, foldchange$vDUX4_logFC, use="complete.obs", method = "pearson")
+cor.test(foldchange$enDUX4_logFC, foldchange$vDUX4_logFC)
+
+```
+
+
+Fig6. Identifying outliers 
+
+```{r}
+foldchange <- foldchange.filtered
+foldchange <- foldchange.unfiltered
+
+# error in viral by inducible (with scaling)
+
+df <- foldchange[, c(1:7, 13:17)] %>% filter(iDUX4_logCPM > 3 | vDUX4_logCPM > 3) 
+df=df[complete.cases(df),]
+
+fit <- lm (scale(df$vDUX4_logFC) ~ scale(df$iDUX4_logFC))
+df <- cbind(df, residuals.i.v = fit$residuals)
+
+plot(scale(df$iDUX4_logFC), scale(df$vDUX4_logFC),
+     col = ifelse(df$residuals.i.v > 2, "#D71E1D", 
+                  ifelse(df$residuals.i.v < -2, "#2C7BB6", "#10101040")), 
+     pch = 16)
+abline(lm (scale(df$vDUX4_logFC) ~ scale(df$iDUX4_logFC)))
+#abline(0, 1, lty = 2)
+abline(h = 0, v = 0, col = "grey60", lty = 2)
+#identify(scale(df$iDUX4_logFC), scale(df$vDUX4_logFC), labels = df$genes)
+
+outliers.up.i.v <- df %>% filter(residuals.i.v > 2)
+outliers.down.i.v <- df %>% filter(residuals.i.v < -2)
+
+common.up.i.v <- df %>% filter(residuals.i.v < 2 & residuals.i.v > -2) %>% filter(iDUX4_logFC > 2)
+common.down.i.v <- df %>% filter(residuals.i.v < 2 & residuals.i.v > -2) %>% filter(iDUX4_logFC < -2)
+
+write.csv(outliers.up.i.v, file = "outliers_up.i.v.csv")
+write.csv(outliers.down.i.v, file = "outliers_down.i.v.csv")
+write.csv(common.up.i.v, file = "common.up.i.v.csv")
+write.csv(common.down.i.v, file = "common.down.i.v.csv")
+
+#plotting the outliers.up.i.v
+plot(foldchange$vDUX4_logCPM, foldchange$vDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+               xlim = c(0, 14),
+                    #ylim = c(-4, 8),
+     col="#10101005")
+points(outliers.up.i.v$vDUX4_logCPM, outliers.up.i.v$vDUX4_logFC, pch=16, cex=1,
+          xlim = c(0, 14),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(outliers.up.i.v$vDUX4_fdr > 0.05, "#10101020", 
+                ifelse(outliers.up.i.v$vDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(outliers.up.i.v$vDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+#identify(foldchange$vDUX4_logCPM, foldchange$vDUX4_logFC,labels = foldchange$genes)
+
+plot(foldchange$iDUX4_logCPM, foldchange$iDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+               xlim = c(0, 14),
+                   # ylim = c(-4, 8),
+     col="#10101005")
+points(outliers.up.i.v$iDUX4_logCPM, outliers.up.i.v$iDUX4_logFC, pch=16, cex=1,
+          xlim = c(0, 14),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(outliers.up.i.v$vDUX4_fdr > 0.05, "#10101020", 
+                ifelse(outliers.up.i.v$vDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(outliers.up.i.v$vDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+#identify(df$iDUX4_logCPM, df$iDUX4_logFC,labels = df$genes)
+
+
+#plotting the outliers.down.i.v
+plot(foldchange$vDUX4_logCPM, foldchange$vDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+               xlim = c(0, 14),
+                    #ylim = c(-4, 8),
+     col="#10101005")
+points(outliers.down.i.v$vDUX4_logCPM, outliers.down.i.v$vDUX4_logFC, pch=16, cex=1,
+          xlim = c(0, 14),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(outliers.down.i.v$vDUX4_fdr > 0.05, "#10101020", 
+                ifelse(outliers.down.i.v$vDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(outliers.down.i.v$vDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+#identify(df$iDUX4_logCPM, df$iDUX4_logFC,labels = df$genes)
+
+plot(foldchange$iDUX4_logCPM, foldchange$iDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+               xlim = c(0, 14),
+                   # ylim = c(-4, 8),
+     col="#10101005")
+points(outliers.down.i.v$iDUX4_logCPM, outliers.down.i.v$iDUX4_logFC, pch=16, cex=1,
+          xlim = c(0, 14),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(outliers.down.i.v$vDUX4_fdr > 0.05, "#10101020", 
+                ifelse(outliers.down.i.v$vDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(outliers.down.i.v$vDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+#identify(df$iDUX4_logCPM, df$iDUX4_logFC,labels = df$genes)
+
+
+plot(foldchange$iDUX4_logCPM, foldchange$vDUX4_logCPM, pch=16, cex=1, col = "#10101001")
+points(outliers.up.i.v$iDUX4_logCPM, outliers.up.i.v$vDUX4_logCPM, pch=16, cex=1,
+            col=ifelse(outliers.up.i.v$iDUX4_fdr > 0.05, "#10101020", 
+                ifelse(outliers.up.i.v$iDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(outliers.up.i.v$iDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+points(outliers.down.i.v$iDUX4_logCPM, outliers.down.i.v$vDUX4_logCPM, pch=16, cex=1,
+            col=ifelse(outliers.down.i.v$iDUX4_fdr > 0.05, "#10101020", 
+                ifelse(outliers.down.i.v$iDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(outliers.down.i.v$iDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+
+# error in inducible by endogenous (with scaling)
+df <- foldchange[, c(1:12)]  %>% filter(enDUX4_logCPM > 3 | iDUX4_logCPM > 3) 
+df=df[complete.cases(df),]
+fit <- lm (scale(df$iDUX4_logFC) ~scale(df$enDUX4_logFC))
+df <- cbind(df, residuals.en.i = fit$residuals)
+
+plot(scale(df$enDUX4_logFC),scale(df$iDUX4_logFC),
+          pch = 16,  
+     col = ifelse(df$residuals.en.i > 2, "#D71E1D",  
+                  ifelse(df$residuals.en.i < -2,"#2C7BB6", "#10101040")))
+
+abline(lm (scale(df$iDUX4_logFC) ~ scale(df$enDUX4_logFC)))
+#abline(0, 1, lty = 2)
+abline(h = 0, v = 0, col = "grey60", lty = 2)
+#identify(scale(df$enDUX4_logFC),scale(df$iDUX4_logFC), labels = df$genes)
+
+outliers.up.en.i <- df %>% filter(residuals.en.i > 2)
+outliers.down.en.i <- df %>% filter(residuals.en.i < -2)
+
+write.csv(outliers.up.en.i, file = "outliers_up.en.i.csv")
+write.csv(outliers.down.en.i, file = "outliers_down.en.i.csv")
+
+
+#plotting the outliers.up.i.v
+plot(foldchange$iDUX4_logCPM, foldchange$iDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+               xlim = c(0, 14),
+                   # ylim = c(-4, 8),
+     col="#10101005")
+points(outliers.up.en.i$iDUX4_logCPM, outliers.up.en.i$iDUX4_logFC, pch=16, cex=1,
+          xlim = c(0, 14),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(outliers.up.en.i$iDUX4_fdr > 0.05, "#10101020", 
+                ifelse(outliers.up.en.i$iDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(outliers.up.en.i$iDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+#identify(df$iDUX4_logCPM, df$iDUX4_logFC,labels = df$genes)
+
+plot(foldchange$enDUX4_logCPM, foldchange$enDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+               xlim = c(0, 14),
+                    #ylim = c(-4, 8),
+     col="#10101005")
+points(outliers.up.en.i$enDUX4_logCPM, outliers.up.en.i$enDUX4_logFC, pch=16, cex=1,
+          xlim = c(0, 14),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(outliers.up.en.i$iDUX4_fdr > 0.05, "#10101020", 
+                ifelse(outliers.up.en.i$iDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(outliers.up.en.i$iDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+#identify(foldchange$enDUX4_logCPM, foldchange$enDUX4_logFC,labels = foldchange$genes)
+
+#plotting the outliers.down.en.i
+plot(foldchange$iDUX4_logCPM, foldchange$iDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+               xlim = c(0, 14),
+                   # ylim = c(-4, 8),
+     col="#10101005")
+points(outliers.down.en.i$iDUX4_logCPM, outliers.down.en.i$iDUX4_logFC, pch=16, cex=1,
+          xlim = c(0, 14),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(outliers.down.en.i$iDUX4_fdr > 0.05, "#10101020", 
+                ifelse(outliers.down.en.i$iDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(outliers.down.en.i$iDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+#identify(df$iDUX4_logCPM, df$iDUX4_logFC,labels = df$genes)
+
+plot(foldchange$enDUX4_logCPM, foldchange$enDUX4_logFC, pch=16, cex=1,
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+               xlim = c(0, 14),
+                    #ylim = c(-4, 8),
+     col="#10101005")
+points(outliers.down.en.i$enDUX4_logCPM, outliers.down.en.i$enDUX4_logFC, pch=16, cex=1,
+          xlim = c(0, 14),
+     cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, 
+     col=ifelse(outliers.down.en.i$iDUX4_fdr > 0.05, "#10101020", 
+                ifelse(outliers.down.en.i$iDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(outliers.down.en.i$iDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+#identify(df$iDUX4_logCPM, df$iDUX4_logFC,labels = df$genes)
+
+plot(foldchange$iDUX4_logCPM, foldchange$enDUX4_logCPM, pch=16, cex=1, col = "#10101001")
+points(outliers.up.en.i$iDUX4_logCPM, outliers.up.en.i$enDUX4_logCPM, pch=16, cex=1,
+            col=ifelse(outliers.up.en.i$iDUX4_fdr > 0.05, "#10101020", 
+                ifelse(outliers.up.en.i$iDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(outliers.up.en.i$iDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+points(outliers.down.en.i$iDUX4_logCPM, outliers.down.en.i$enDUX4_logCPM, pch=16, cex=1,
+            col=ifelse(outliers.down.en.i$iDUX4_fdr > 0.05, "#10101020", 
+                ifelse(outliers.down.en.i$iDUX4_logFC < -2, "#2C7BB6", 
+                       ifelse(outliers.down.en.i$iDUX4_logFC > 2, "#D71E1D", "#AADDA3"))))
+
+
+```
+
+Understanding the outliers
+```{r}
+
+foldchange <- foldchange.filtered
+df <- foldchange[, c(1:12)]
+df=df[complete.cases(df),]
+fit <- lm (scale(df$iDUX4_logFC) ~scale(df$enDUX4_logFC))
+df <- cbind(df, residuals.en.i = fit$residuals)
+
+y <- foldchange.filtered %>% filter(enDUX4_logFC > 2, enDUX4_fdr < 0.05, is.na(iDUX4_logFC))
+
+temp <- cbind(foldchange.unfiltered, scaled.iDUX4_logFC = scale(foldchange.unfiltered$iDUX4_logFC))
+y <- merge(y, temp, by = "id") 
+
+z <- foldchange.filtered %>% filter(enDUX4_logFC < -1, enDUX4_fdr < 0.05, is.na(iDUX4_logFC))
+
+temp <- cbind(foldchange.unfiltered, scaled.iDUX4_logFC = scale(foldchange.unfiltered$iDUX4_logFC))
+z <- merge(z, temp, by = "id") 
+
+plot(scale(df$enDUX4_logFC), scale(df$iDUX4_logFC),
+     col = "#10101010", 
+     pch = 16,
+     xlim = c(-4, 10),
+     ylim = c(-4, 10))
+abline(lm (scale(df$iDUX4_logFC) ~ scale(df$enDUX4_logFC)))
+abline(h = 0, v = 0, col = "grey60", lty = 2)
+
+points(y$enDUX4_logFC.y, y$scaled.iDUX4_logFC, 
+    col = "#10109090", 
+     pch = 16,
+     xlim = c(-4, 10),
+     ylim = c(-4, 10))
+#identify(y$enDUX4_logFC.y, y$scaled.iDUX4_logFC, labels = y$genes.x)
+
+
+points(z$enDUX4_logFC.y, z$scaled.iDUX4_logFC, 
+    col = "#90101050", 
+     pch = 16,
+     xlim = c(-4, 10),
+     ylim = c(-4, 10))
+#identify(z$enDUX4_logFC.y, z$scaled.iDUX4_logFC, labels = z$genes.x)
+
+
+```
+
+Go analysis 2/19/16 
+
+```{r}
+#Used http://pantherdb.org/geneListAnalysis.do
+```
+
+Figure 7
+```{r}
+install.packages("scatterplot3d")
+library(scatterplot3d)
+
+df <- foldchange.filtered
+#df <- foldchange.unfiltered
+
+scatterplot3d(df$iDUX4_logFC, df$vDUX4_logFC, df$enDUX4_logFC, color = ifelse(df$iDUX4_logFC > 1 & df$enDUX4_logFC >1 & df$vDUX4_logFC >1, "#D71E1D", ifelse(df$iDUX4_logFC < -1 & df$enDUX4_logFC < -1 & df$vDUX4_logFC < -1, "#2C7BB6", "#10101040")), pch = 16, cex.symbols = 1.4)
+
+scatterplot3d(df$enDUX4_logFC, df$vDUX4_logFC, df$iDUX4_logFC, color = ifelse(df$iDUX4_logFC > 1 & df$enDUX4_logFC > 1 & df$vDUX4_logFC > 1, "#D71E1D", ifelse(df$iDUX4_logFC < -1 & df$enDUX4_logFC < -1 & df$vDUX4_logFC < -1, "#2C7BB6", "#10101040")), pch = 16, cex.symbols = 1.4)
+
+scatterplot3d(df$iDUX4_logFC, df$enDUX4_logFC, df$vDUX4_logFC, color = ifelse(df$iDUX4_logFC > 1 & df$enDUX4_logFC >1 & df$vDUX4_logFC >1, "#D71E1D", ifelse(df$iDUX4_logFC < -1 & df$enDUX4_logFC < -1 & df$vDUX4_logFC < -1, "#2C7BB6", "#10101040")), pch = ifelse(!is.na(df$`2_4FC`), 16, 28), cex.symbols = 1.4)
+
+biomarkers.yao <- read.table("/Volumes/homes/cold/sjaganna/papers/2016/tapscott-bradley.dux4_models/figs/Fig7/biomarkers.txt", quote="\"", comment.char="")
+names(biomarkers.yao) <- c("id")
+
+df.biomarker.yao <- left_join(biomarkers.yao, df, by = "id")
+write.csv(df.biomarker.yao, file="df.biomarker.yao.csv")
+
+scatterplot3d(df.biomarker.yao$iDUX4_logFC, df.biomarker.yao$enDUX4_logFC, df.biomarker.yao$vDUX4_logFC)
+
+#yao biomarkers
+df <- df.biomarker.yao[, c(1, 2, 3:4, 8:9, 13:14)]
+df <- df %>% filter(id != "ENSG00000243501")
+
+plot(df$iDUX4_logFC, df$iDUX4_logCPM, xlim = c(-1, 8), ylim = c(0, 14), pch = 16, col = ifelse(df$genes %in% c("LEUTX", "PRAMEF2", "TRIM43", "KHDC1L"), "red", "#10101090"), cex = 1.5)
+#identify(df$iDUX4_logFC, df$iDUX4_logCPM, labels = df$genes)
+abline(v = 2, lty = 2)
+abline(h = 3, lty = 2)
+
+plot(df$enDUX4_logFC, df$enDUX4_logCPM, xlim = c(-1, 8), ylim = c(0, 14), pch = 16, col = ifelse(df$genes %in% c("LEUTX", "PRAMEF2", "TRIM43", "KHDC1L"), "red", "#10101090"), cex = 1.5)
+#identify(df$enDUX4_logFC, df$enDUX4_logCPM, labels = df$genes)
+abline(v = 2, lty = 2)
+abline(h = 3, lty = 2)
+
+plot(df$vDUX4_logFC, df$vDUX4_logCPM, xlim = c(-2, 17), ylim = c(0, 14), pch = 16, col = ifelse(df$genes %in% c("LEUTX", "PRAMEF2", "TRIM43", "KHDC1L"), "red", "#10101090"), cex = 1.5)
+#identify(df$vDUX4_logFC, df$vDUX4_logCPM, labels = df$genes)
+abline(v = 2, lty = 2)
+abline(h = 3, lty = 2)
+
+plot(df$iDUX4_logFC, df$enDUX4_logFC, xlim = c(-2, 9), ylim = c(-2, 7), pch = 16, col = ifelse(df$genes %in% c("LEUTX", "PRAMEF2", "TRIM43", "KHDC1L"), "red", "#10101090"), cex = 1.5)
+#identify(df$iDUX4_logFC, df$iDUX4_logCPM, labels = df$genes)
+abline(v = 0, lty = 2)
+abline(h = 0, lty = 2)
+
+cor.test(df$iDUX4_logFC, df$enDUX4_logFC, method = "pearson", use = "complete.obs")
+```
